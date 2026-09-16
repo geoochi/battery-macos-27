@@ -1,0 +1,12 @@
+# Local builds and release archives
+/build/
+/dist/
+.DS_Store
+
+# Private hardware sessions, raw system logs and one-off experiments
+/research/
+*.jsonl
+*.log
+*.dmg
+.env
+.env.*
