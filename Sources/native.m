@@ -50,7 +50,7 @@ BOOL nativeSetLimit(id<BATTNativeClient> c,NSInteger limit,NSError **error) {
   if(error)*error=nativeError(5,[NSString stringWithFormat:@"Native write failed: %@. Previous limit remains unchanged.",writeError.localizedDescription?:@"setter failure"]);return NO;
  }
  if(![before[@"available_limits"] containsObject:before[@"selected_limit"]]){
-  if(error)*error=nativeError(5,@"Write was not verified; this API cannot restore the previous experimental limit. Run sudo battctl hold 50 and restart normally, or sudo battctl restore to recover the original supported limit.");return NO;
+  if(error)*error=nativeError(5,[NSString stringWithFormat:@"Write was not verified; this API cannot restore the previous experimental limit. Run sudo battctl hold %@ and restart normally, or sudo battctl restore to recover the original supported limit.",before[@"selected_limit"]]);return NO;
  }
  // Roll back even if the setter failed: it might have partially applied the request.
  NSError *restoreError=nil;BOOL restored=[c setMCLLimit:[before[@"selected_limit"] unsignedCharValue] error:&restoreError];

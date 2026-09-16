@@ -71,35 +71,41 @@ static bool detect(void){uint8_t b[4];firmware=!smcRead("bfF0",b,1)&&!smcRead("b
 int main(int argc,const char**argv){@autoreleasepool{
  setbuf(stdout,NULL);
  if(argc==2&&(!strcmp(argv[1],"--version")||!strcmp(argv[1],"version"))){puts("battctl " BATTCTL_VERSION);return 0;}
- if(argc<2||!strcmp(argv[1],"help")||!strcmp(argv[1],"--help")){puts("battctl hold 50 | verify [--json] | monitor [--json] | restore\nbattctl status [--json] | watch [--json] | native-limit [80..100] | doctor\nhold: activate the experimental persistent 50% policy; first staging requires sudo and a manual reboot.\nverify/monitor: read actual policy and battery flow; monitor every 30 seconds, does not prevent sleep.\nrestore: restore the original native limit (sudo). No background controller needed for native holding.\nLegacy SMC only: run [50] | reset (sudo; unavailable on current firmware).");return 0;}
+ if(argc<2||!strcmp(argv[1],"help")||!strcmp(argv[1],"--help")){puts("battctl hold TARGET | verify [TARGET] [--json] | monitor [TARGET] [--json] | restore\nbattctl status [--json] | watch [--json] | native-limit [80..100] | doctor\nhold: stage an integer target from 20 to 99; requires sudo, then a manual reboot if not active.\nverify/monitor: follow the saved requested target (legacy default 50), or check an explicit TARGET; monitor every 30 seconds.\nrestore: restore the original native limit (sudo). No background controller needed for native holding.\nLegacy SMC only: run [50] | reset (sudo; unavailable on current firmware).");return 0;}
  if(!strcmp(argv[1],"hold")){
- if(argc!=3||strcmp(argv[2],"50")){fprintf(stderr,"Usage: battctl hold 50\n");return 2;}
- if(conflict())return 1;return persistentHold50();
+ NSInteger requested=0;
+ if(argc!=3||!parseHoldTarget(argv[2],&requested)){fprintf(stderr,"Usage: battctl hold TARGET (integer 20..99; use native-limit 100 for full charge)\n");return 2;}
+ if(conflict())return 1;return persistentHold(requested);
  }
  if(!strcmp(argv[1],"restore")){
  if(argc!=2)return 2;if(conflict())return 1;return persistentRestore();
  }
  if(!strcmp(argv[1],"verify")||!strcmp(argv[1],"monitor")){
- if(argc>3||(argc==3&&strcmp(argv[2],"--json"))){fprintf(stderr,"Expected verify/monitor [--json]\n");return 2;}
- BOOL monitor=!strcmp(argv[1],"monitor"),json=argc==3;signal(SIGINT,stopSignal);signal(SIGTERM,stopSignal);
+ NSInteger requested=0;BOOL json=NO;
+ for(int i=2;i<argc;i++){
+  if(!strcmp(argv[i],"--json")&&!json){json=YES;continue;}
+  if(requested==0&&parseHoldTarget(argv[i],&requested))continue;
+  fprintf(stderr,"Expected verify/monitor [TARGET] [--json], TARGET integer 20..99\n");return 2;
+ }
+ BOOL monitor=!strcmp(argv[1],"monitor");signal(SIGINT,stopSignal);signal(SIGTERM,stopSignal);
  NSTimeInterval previous=0;int result=0;
  do{@autoreleasepool{
-  NSMutableDictionary *d=[effectiveLimitSnapshot(telemetry(properties("AppleSmartBattery"),properties("IOPMrootDomain")),50) mutableCopy];
+  NSMutableDictionary *d=[effectiveLimitSnapshot(telemetry(properties("AppleSmartBattery"),properties("IOPMrootDomain")),requested) mutableCopy];
   NSTimeInterval now=NSDate.date.timeIntervalSince1970;
   d[@"sample_gap_seconds"]=previous?@(now-previous):(id)NSNull.null;previous=now;
   result=[d[@"policy_active"] boolValue]?0:1;
   if(json){NSData *data=[NSJSONSerialization dataWithJSONObject:d options:NSJSONWritingSortedKeys error:NULL];puts([[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding].UTF8String);}
-  else{NSDictionary *b=d[@"battery"];printf("%s target=50%% policy=%s phase=%s battery=%s%% flow=%s power=%sW lid=%s adapter=%s\n",[b[@"time"] UTF8String],result?"NOT VERIFIED":"active",[d[@"phase"] UTF8String],[[b[@"percent"] description] UTF8String],[b[@"flow"] UTF8String],[[b[@"battery_watts"] description] UTF8String],[b[@"lid"] UTF8String],[[b[@"adapter_present"] description] UTF8String]);for(NSString *e in d[@"errors"])fprintf(stderr,"%s\n",e.UTF8String);}
+  else{NSDictionary *b=d[@"battery"];printf("%s target=%s%% policy=%s phase=%s battery=%s%% flow=%s power=%sW lid=%s adapter=%s\n",[b[@"time"] UTF8String],[[d[@"target"] description] UTF8String],result?"NOT VERIFIED":"active",[d[@"phase"] UTF8String],[[b[@"percent"] description] UTF8String],[b[@"flow"] UTF8String],[[b[@"battery_watts"] description] UTF8String],[b[@"lid"] UTF8String],[[b[@"adapter_present"] description] UTF8String]);for(NSString *e in d[@"errors"])fprintf(stderr,"%s\n",e.UTF8String);}
   if(!monitor)break;for(int i=0;i<30&&!stopping;i++)sleep(1);
  }}while(!stopping);return monitor?0:result;
  }
  if(!strcmp(argv[1],"doctor")){
  if(argc!=2)return 2;
- NSDictionary *d=effectiveLimitSnapshot(telemetry(properties("AppleSmartBattery"),properties("IOPMrootDomain")),50);
+ NSDictionary *d=effectiveLimitSnapshot(telemetry(properties("AppleSmartBattery"),properties("IOPMrootDomain")),0);
  NSData *data=[NSJSONSerialization dataWithJSONObject:d options:NSJSONWritingPrettyPrinted|NSJSONWritingSortedKeys error:NULL];puts([[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding].UTF8String);
  BOOL c=conflict();
- if([d[@"policy_active"] boolValue]){puts("Native 50% policy is active; SMC access is not required. Actual target holding and sleep retention need measurements.");return c?1:0;}
- // Fall through to legacy diagnostics only when native 50% is not active.
+ if([d[@"policy_active"] boolValue]){printf("Native %s%% policy is active; SMC access is not required. Verify actual holding and sleep retention on your device.\n",[d[@"target"] description].UTF8String);return c?1:0;}
+ // Fall through to legacy diagnostics only when the requested native policy is not active.
  }
  if(!strcmp(argv[1],"native-limit")){
  if(argc>3){fprintf(stderr,"Usage: battctl native-limit [percent]\n");return 2;}
@@ -124,7 +130,7 @@ int main(int argc,const char**argv){@autoreleasepool{
  if(smcOpen()){fprintf(stderr,"Cannot open AppleSMC; try sudo\n");return 1;}
  if(!strcmp(cmd,"doctor")){
  NSError*e=nil;NSDictionary*d=nativeSnapshot(nativeClient(&e),&e);
- if(d)printf("native=PowerUI selected=%s%% setter_values=%s; use hold 50 for experimental reboot staging\n",[d[@"selected_limit"] description].UTF8String,[d[@"available_limits"] description].UTF8String);
+ if(d)printf("native=PowerUI selected=%s%% setter_values=%s; use hold TARGET for experimental reboot staging\n",[d[@"selected_limit"] description].UTF8String,[d[@"available_limits"] description].UTF8String);
  else fprintf(stderr,"Native API: %s\n",e.localizedDescription.UTF8String);
  }
  smcDiagnostics=!strcmp(cmd,"doctor");

@@ -17,10 +17,17 @@ test: all
 	./build/native-test
 	$(CC) $(CFLAGS) -framework Foundation tests/persistent.m Sources/persistent.m Sources/native.m -o build/persistent-test
 	./build/persistent-test
+	$(CC) $(CFLAGS) -framework Foundation tests/configurable.m Sources/persistent.m Sources/native.m -o build/configurable-test
+	./build/configurable-test
 	./build/battctl --help
 	./build/battctl --version
 	@for script in scripts/*.sh; do bash -n "$$script" || exit; done
 	! ./build/battctl run 0
 	! ./build/battctl run 50oops
+	! ./build/battctl hold 19
+	! ./build/battctl hold 100
+	! ./build/battctl hold 70oops
+	! ./build/battctl verify 70 50
+	! ./build/battctl monitor --json --json
 clean:
 	rm -rf build

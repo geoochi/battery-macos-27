@@ -31,6 +31,13 @@ Raw session logs are not distributed.
 The native policy continued independently of the read-only CLI recorder. No SIP,
 system binary, forced service restart or sleep-setting changes were needed.
 
+## Configurable targets (v0.2.0)
+
+Targets 20–99 are now configurable. Synthetic tests cover switching from 50 to 70,
+replacing a pending target, cancellation, configuration failures and rollback.
+The device was kept at 50 during development; 70 and other targets have not completed
+hardware validation. The successful 50% results above must not be generalized to them.
+
 ## Not established
 
 - Compatibility with another model, chip, OS build or firmware.

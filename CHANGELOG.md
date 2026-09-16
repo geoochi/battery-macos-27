@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0 — configurable experimental targets
+
+- `hold TARGET` accepts integers 20–99, including 70; 100 remains the ordinary
+  `native-limit 100` full-charge operation.
+- Save requested intent separately from active policy; `verify` and `monitor`
+  follow it by default or accept an explicit target. Legacy default remains 50.
+- Preserve the original backup while replacing targets, including pending requests;
+  roll back the previous saved preference and requested intent on partial failures.
+- Update existing optional recorders when their start script is run again.
+- Only 50% has completed hardware testing; all other targets remain experimental.
+
 ## 0.1.0 — experimental prerelease
 
 - Persistent 50% preference staging with an original-limit backup and manual restart.

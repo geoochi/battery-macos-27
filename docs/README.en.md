@@ -2,15 +2,16 @@
 
 [中文](../README.md) · [Releases](https://github.com/geoochi/battery-macos-27/releases)
 
-An experimental native CLI that lets macOS discharge a plugged-in MacBook to 50%
-and retain the charge limit across normal use and sleep. Objective-C/C, Foundation
+An experimental native CLI with integer targets from 20 to 99%, using macOS to
+apply the charge limit. Only 50% has completed hardware validation, including
+discharge to target and retention across normal use and sleep. Objective-C/C, Foundation
 and IOKit; no third-party runtime or continuously running charge controller.
 
 ## Compatibility comes first
 
-**50% staging is restricted to MacBookPro18,1 (M1 Pro), macOS 27.0 build 26A428.**
+**Target staging is restricted to MacBookPro18,1 (M1 Pro), macOS 27.0 build 26A428.**
 Firmware 20457.1.29 was observed on the tested device. Other model/build pairs are
-rejected for new 50% preference writes; there is no force flag. Read-only commands
+rejected for new target preference writes; there is no force flag. Read-only commands
 may work on other versions, but private APIs can be unavailable or change.
 
 This is an experimental prerelease, not an Apple-supported charging API. One Mac
@@ -30,13 +31,13 @@ sudo ./scripts/install.sh
 battctl --version
 ```
 
-Alternatively, download `battctl-v0.1.0-macos-arm64.tar.gz` and `SHA256SUMS` from
+Alternatively, download `battctl-v0.2.0-macos-arm64.tar.gz` and `SHA256SUMS` from
 [Releases](https://github.com/geoochi/battery-macos-27/releases), then:
 
 ```sh
 shasum -a 256 -c SHA256SUMS
-tar -xzf battctl-v0.1.0-macos-arm64.tar.gz
-cd battctl-v0.1.0-macos-arm64
+tar -xzf battctl-v0.2.0-macos-arm64.tar.gz
+cd battctl-v0.2.0-macos-arm64
 ./build/battctl --version
 sudo ./scripts/install.sh
 ```
@@ -54,31 +55,58 @@ Installation and upgrades do not change battery settings or install a charge dae
 2. Connect power. Check `sysctl -n hw.model`, `sw_vers -buildVersion`, and
    `battctl native-limit` against the supported configuration above.
 3. Run `sudo battctl hold 50`. The original supported limit is backed up before
-   the experimental preference is written. An already active 50% policy is a no-op.
+   the experimental preference is written. Matching saved, requested and active 50% values are a no-op.
 4. When instructed, save your work and restart the Mac normally. The CLI never
    initiates a reboot or forcibly restarts a protected system service.
 5. Run `battctl verify` and optionally `battctl monitor`. Normal use discharges the
    battery naturally; no CPU stress workload is necessary.
 
 `policy=active` requires the PowerUI selection and effective `pmset` manual-limit
-entries to agree on 50%. A successful preference write alone is not verification.
+entries to agree on the requested target. A successful preference write alone is not verification.
 `monitor` runs every 30 seconds; Ctrl-C stops observation without removing the limit.
 `near_target` describes a sample, not proof of sustained holding.
+
+## Change the target, for example to 70%
+
+```sh
+sudo battctl hold 70
+# Save work and restart normally when prompted, then:
+battctl verify       # follows the requested target saved by battctl
+battctl verify 70    # explicitly verifies 70, not just any active limit
+battctl monitor     # follows saved target changes on each sample
+```
+
+Accepted targets are integers 20–99. Use `native-limit 100` to allow full charging;
+`hold 100` is rejected. `hold` always requires sudo to inspect the saved system preference as well as
+active policy. New targets usually need a normal restart. If saved preference,
+requested intent and active policy already agree, it does not write or need a restart. A saved 70 with an active 50 is
+reported as unverified, with a nonzero `verify` exit status.
+
+The original-limit backup is never replaced when switching targets. You may replace
+a pending request before reboot or cancel it with `sudo battctl hold 50`.
+Only 50 has completed hardware testing; 70 and other values remain unverified,
+including whether increasing the target immediately charges to the new value.
+
+Requested intent is stored in the root-owned, world-readable
+`/Library/Preferences/com.geoochi.battctl.plist`. Legacy installations without this
+file default to checking 50, not whatever value the system currently happens to use.
+Successful `restore` clears this file; use `native-limit` to inspect the restored value.
+After upgrading, run `./scripts/record-test.sh start` again to update an existing recorder.
 
 ## Commands
 
 | Command | Purpose |
 | --- | --- |
 | `status [--json]`, `watch [--json]` | Battery telemetry, once or every five seconds |
-| `verify [--json]`, `monitor [--json]` | Effective 50% policy and battery flow, once or every 30 seconds |
+| `verify [TARGET] [--json]`, `monitor [TARGET] [--json]` | Requested or explicit target policy and battery flow, once or every 30 seconds |
 | `doctor` | Native policy and legacy diagnostic information |
 | `native-limit [80]` | Query or set an ordinary supported native limit |
-| `hold 50` | Stage the experimental persistent limit; sudo required for writing |
+| `hold TARGET` | Stage an integer target from 20 to 99; sudo required |
 | `restore` | Restore the original backed-up limit; sudo required |
 
-Prefix each with `battctl`. `verify` exits nonzero when the 50% policy cannot be
+Prefix each with `battctl`. `verify` exits nonzero when the requested policy cannot be
 verified. The current ordinary setter offers 80/85/90/95/100; `native-limit 50` is
-rejected. Use `hold 50` for the separate preference-loading path. Legacy `run` and
+rejected. Use `hold TARGET` for the separate preference-loading path. Legacy `run` and
 `reset` are retained for research compatibility and are not the supported workflow
 on the tested firmware.
 
@@ -109,7 +137,7 @@ experiment. If instructed after a restore failure, restart normally and recheck.
 - No fixed 48–50% recharge band or permanent suppression of calibration charging
   is promised. Observe the first discharge and a sleep/wake cycle yourself.
 - Optional `./scripts/record-test.sh start|status|stop` installs a per-user read-only
-  sampling job. It can sample during background wake, does not prevent sleep and
+  sampling job that follows the saved target. It can sample during background wake, does not prevent sleep and
   does not control charging. Logs append in `~/Library/Logs/battctl/`; stop and
   clean them up when finished. Stopping recording does not remove the limit.
 - The CLI has no network requests or telemetry uploads. Logs can reveal timestamps,

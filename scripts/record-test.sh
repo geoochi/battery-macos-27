@@ -19,13 +19,18 @@ if [[ $1 == stop ]]; then
  echo "Recorder stopped; battery policy unchanged. Logs retained: $LOGDIR/monitor.jsonl"
  exit
 fi
-if launchctl print "$JOB" >/dev/null 2>&1; then
- echo "Recorder already installed. Logs: $LOGDIR/monitor.jsonl"
- exit
-fi
 [[ ! -L "$DEST" && ! -L "$LOGDIR" && ! -L "$PLIST" ]] || { echo 'Refusing symlink output paths.' >&2; exit 1; }
 mkdir -p "$DEST" "$LOGDIR" "$HOME/Library/LaunchAgents"
-install -m 755 "$ROOT/build/battctl" "$DEST/battctl"
+# Replace atomically so an existing sampling process can finish its current read.
+RECORDER_TMP=$(mktemp "$DEST/.battctl.XXXXXX")
+trap 'rm -f "$RECORDER_TMP"' EXIT
+install -m 755 "$ROOT/build/battctl" "$RECORDER_TMP"
+mv -f "$RECORDER_TMP" "$DEST/battctl"
+if launchctl print "$JOB" >/dev/null 2>&1; then
+ launchctl kickstart "$JOB"
+ echo "Recorder updated; follows the saved requested target. Logs: $LOGDIR/monitor.jsonl"
+ exit
+fi
 rm -f "$PLIST"
 /usr/bin/plutil -create xml1 "$PLIST"
 /usr/bin/plutil -insert Label -string "$LABEL" "$PLIST"

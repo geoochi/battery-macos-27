@@ -1,4 +1,5 @@
 #!/bin/bash
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-exec "$ROOT/build/battctl" hold 50
+[[ $# -le 1 ]] || { echo 'Usage: stage-reboot-test.sh [TARGET]' >&2; exit 2; }
+exec "$ROOT/build/battctl" hold "${1:-50}"

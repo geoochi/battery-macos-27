@@ -1,4 +1,4 @@
-# Technical notes: the macOS 27 native 50% path
+# Technical notes: configurable native charge limits on macOS 27
 
 ## Two separate interfaces
 
@@ -12,7 +12,7 @@ restarted normally. After restart, both PowerUI and the system's effective
 `manualChargeLimit` entries reported 50. Charge Limit must already be enabled
 (`MCLFeatureState=1`). A preference-change notification alone did not reload 50.
 
-`hold 50` implements this preference path only on the model/build pair tested.
+`hold TARGET` implements this preference path for integers 20–99 only on the model/build pair tested.
 It does not alter system binaries, private entitlements or SIP, kill system
 services, or reboot automatically. The root-owned original-limit backup is retained
 for restoration and retries. The internal backup directory keeps its original
@@ -24,8 +24,8 @@ in PowerUI, preference semantics or firmware can invalidate it.
 ## What verification means
 
 `verify` reads battery telemetry from AppleSmartBattery/IOPMrootDomain, queries
-PowerUI and parses `pmset -g battlimit`. It requires an enabled selection of 50 and
-at least one effective manual limit of 50, with no conflicting active manual entry.
+PowerUI and parses `pmset -g battlimit`. It requires an enabled selection of the requested target and
+at least one effective manual limit at that target, with no conflicting active manual entry.
 It does not equate a saved preference with an active limit, or an active limit with
 long-term measured stability. A single near-target sample is labeled `near_target`.
 
@@ -37,6 +37,26 @@ Other monitoring apps' bus sensor names are not assumed equivalent to these fiel
 A user-space monitor does not run continuously in deep sleep. System sleep/wake
 logs and before/after telemetry establish retention over tested cycles, not the
 absence of every transient change while asleep.
+
+## Requested intent and target changes
+
+The root-owned `/Library/Preferences/com.geoochi.battctl.plist` stores the requested
+integer target, separately from PowerUI's active selection and the original-limit
+backup. Default verification reads this file on every sample. An explicit CLI target
+overrides it for that read only; absence preserves the legacy default of 50. Invalid
+or unsafe metadata fails verification instead of silently accepting the active value.
+
+Changing from an experimental 50 to 70 is allowed with a valid original backup.
+A target change can replace a pending request before restarting. The transaction
+writes and verifies the system preference, then atomically saves and reads back the
+requested-target file. Failure attempts to restore both the immediately previous
+saved preference and previous requested intent, retaining the original backup.
+A process or system crash between the two files is not an atomic cross-file operation;
+verification can report a mismatch, and re-running the intended hold command repairs
+saved intent. Successful restore clears requested intent after verifying recovery.
+
+Only 50 has completed hardware validation. Configurable-target unit tests establish
+software behavior, not that every value is accepted and held by the firmware.
 
 ## Earlier SMC and IOPS attempts
 
