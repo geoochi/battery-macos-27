@@ -15,3 +15,8 @@ The native preference backend, policy verification, telemetry, lifecycle and CLI
 integration were written for this project. No Apple or commercial battery-app
 binaries, disassemblies or proprietary source are redistributed. Foundation, IOKit
 and the private PowerUI framework are loaded from the user's installed macOS.
+
+The adapter-switch approach references [batt PR #154](https://github.com/charlie0129/batt/pull/154),
+head `5b15f980e2678270c9e78862c0c2018c024fff07`, by tr3mo and upstream contributors.
+The adaptive policy and Objective-C controller/guard integration were implemented
+for this project; the upstream Go daemon was not vendored.

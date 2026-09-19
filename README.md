@@ -2,9 +2,43 @@
 
 [English](docs/README.en.md) · [下载 / Releases](https://github.com/geoochi/battery-macos-27/releases) · [技术说明](docs/macos-27-battery.md)
 
-设置 **20–99% 的整数目标**（例如50或70），让 macOS 在接通电源时执行充电上限。
-当前只有50%完成硬件验收；其它目标可配置，但实际效果仍需验证。
-原生 Objective-C/C CLI，无第三方运行时，无需常驻限充进程。
+输入一个目标值，例如 `sudo battctl hold 60`，后台自动放电并管理区间，无需重启。
+当前源码版本 **0.3.0-dev** 新增此模式；已发布的 **v0.2.0** 仍使用原生重启流程。
+原生 Objective-C/C CLI，无第三方运行时。
+
+## 免重启模式（当前源码）
+
+```sh
+make test
+sudo ./build/battctl hold 60
+./build/battctl verify
+./build/battctl monitor
+```
+
+- **先开盖、接上电源**。`hold` 启动由 launchd 管理的后台服务，命令返回后可关闭终端。
+- 用户只输入20–99的整数目标，无需配置上下限、轮询间隔或切换频率。
+- 高于目标时切断适配器输入，使用电池；初始工作区间为目标以下5个百分点。
+  例如60会在约55–60之间循环，并非到60后电池电流恒定为零。
+- 后台只在完整循环结束后调整区间：循环不足1小时则放宽1个百分点，超过3小时则收窄1个百分点；
+  宽度始终限制在5–10个百分点。状态显示当前实际区间。此策略减少切换，但会增加电池使用量，尚无长期寿命验证。
+- 如果目标与已验证生效的原生上限相同，则到达目标后交给原生策略，不循环。
+- 目标不能高于当前原生上限；需要提高原生上限时使用下面的 `hold-native` 流程。
+- **合盖或睡眠时恢复适配器，暂停区间控制**；此时原有原生上限接管，可能高于所设目标。
+  开盖唤醒后自动恢复控制。不修改系统睡眠设置，不保证睡眠期间维持新目标。
+- 强制放电期间，系统可能显示未接电；两个连接标志都会被硬件开关屏蔽。
+  实际拔线无法立即区别，恢复适配器后才能确认是否仍接电。
+- 读数有刷新延迟，百分比边界可能有小幅偏差。后台检查与硬件切换是两回事，不会每次检查都切换电源。
+- 进程退出或失去心跳时，独立看护进程恢复适配器。普通异常退出由 launchd 重启；重启电脑后也会重新加载所选目标。
+
+```sh
+sudo ./build/battctl hold 65        # 更改目标，不重启
+./build/battctl verify --json       # 当前后台状态和区间
+./build/battctl verify-native       # 单独检查原生策略
+sudo ./build/battctl adapter-stop   # 停止后台控制，恢复适配器，保留原生偏好
+```
+
+此模式已实测启动、短时放电、停止、控制进程被强杀后的恢复，以及已有原生目标的接管。
+**完整60%充放电循环、自适应区间的长期效果、实际合盖/睡眠恢复尚待硬件验收**；下表的合盖与睡眠结果仅属于原生模式。
 
 > **实验性预发布，支持范围有限。** 目前只在 **M1 Pro、MacBookPro18,1、macOS 27.0 build 26A428** 上验证50%完整流程。
 > 其他机型/构建会拒绝新的目标配置写入；没有强制绕过选项。
@@ -39,7 +73,9 @@ make test
 sudo ./scripts/install.sh
 ```
 
-### 方式二：下载预编译版本
+### 方式二：下载预编译版本（v0.2.0，仅原生模式）
+
+注意：v0.2.0 的命令名称仍是 `hold`，等同于当前源码的 `hold-native`。免重启模式请从源码构建。
 
 从 [Releases](https://github.com/geoochi/battery-macos-27/releases) 下载
 `battctl-v0.2.0-macos-arm64.tar.gz` 和 `SHA256SUMS`，放在同一目录：
@@ -57,9 +93,9 @@ sudo ./scripts/install.sh
 
 两种安装方式都把程序放入 `/Library/Application Support/battctl/battctl`，并链接到
 `/usr/local/bin/battctl`。若PATH不含此目录，使用 `/usr/local/bin/battctl`。
-安装本身不会设置电池上限，也不会安装限充守护程序。升级时重新运行安装脚本。
+安装脚本本身不设置上限。执行 `hold` 时才安装后台控制器；执行 `hold-native` 使用原生流程。升级后重新运行安装脚本，并再次执行 `hold TARGET` 更新运行中的控制器。
 
-## 首次启用（以已实测的50%为例）
+## 原生模式：首次启用（以已实测的50%为例）
 
 1. 停用其它电池控制软件，在系统设置中启用原生“充电上限”，先选80%；结束“充满电”等临时覆盖。
 2. 接好充电线，检查型号、系统构建和当前值：
@@ -73,7 +109,7 @@ sudo ./scripts/install.sh
 3. 保存实验配置：
 
    ```sh
-   sudo battctl hold 50
+   sudo battctl hold-native 50
    ```
 
    程序备份原上限、保存50，并提示是否需要重启。已生效时不会重复写入。
@@ -92,7 +128,7 @@ sudo ./scripts/install.sh
 ## 修改目标，例如70%
 
 ```sh
-sudo battctl hold 70
+sudo battctl hold-native 70
 # 保存工作，按提示手动正常重启，然后：
 battctl verify          # 默认读取本程序保存的目标70
 battctl verify 70        # 显式检查70，避免将其它有效上限误认为目标已生效
@@ -100,10 +136,10 @@ battctl monitor         # 持续跟随本程序保存的目标
 ```
 
 支持20–99的整数；`hold 100` 会拒绝，允许充满请用 `native-limit 100`。
-`hold`始终使用sudo，以便连同保存的系统偏好一起核对，避免漏掉待重启配置。
-目标变化通常需要正常重启；若保存值、请求值、实际策略均相同，则无需写入或重启。
+`hold-native`始终使用sudo，以便连同保存的系统偏好一起核对，避免漏掉待重启配置。
+原生模式的目标变化通常需要正常重启；若保存值、请求值、实际策略均相同，则无需写入或重启。
 **已保存70、实际仍是50时，verify会返回未生效和非零退出码。**
-修改目标保留首次原上限备份；重启前也可再次修改或用 `sudo battctl hold 50` 取消70请求。
+修改目标保留首次原上限备份；重启前也可再次修改或用 `sudo battctl hold-native 50` 取消70请求。
 70及其他非50目标尚未完成硬件验收，不保证升高目标后立即充电到精确目标值。
 
 请求的目标保存在 `/Library/Preferences/com.geoochi.battctl.plist`，由root写入、普通用户只读。
@@ -122,10 +158,13 @@ battctl monitor         # 持续跟随本程序保存的目标
 | `battctl doctor` | 诊断；目标原生策略有效时无需SMC控制权限 |
 | `battctl native-limit` | 查看PowerUI选择值、启用状态和可设置值 |
 | `battctl native-limit 80` | 设置系统支持值；当前接口提供80/85/90/95/100 |
-| `sudo battctl hold TARGET` | 备份并准备20–99%目标配置；未生效时提示手动重启 |
+| `sudo battctl hold TARGET` | 启动或更新免重启后台控制，自动管理区间 |
+| `sudo battctl adapter-stop` | 停止后台控制并恢复适配器供电 |
+| `battctl verify-native [TARGET]` | 单独核验原生上限 |
+| `sudo battctl hold-native TARGET` | 备份并准备20–99%目标配置；未生效时提示手动重启 |
 | `sudo battctl restore` | 恢复首次备份的原上限并核验生效情况 |
 
-`native-limit 50` 会被拒绝，低于80的自定义目标使用 `hold TARGET`。`near_target` 只描述单次读数接近目标，
+`native-limit 50` 会被拒绝；免重启控制使用 `hold TARGET`，原生偏好流程使用 `hold-native TARGET`。`near_target` 只描述单次读数接近目标，
 不等于已经证明长期保持。项目中的 `run` / `reset` 是旧SMC实验后端，当前固件不可用，
 不属于本版推荐工作流程。
 
@@ -150,7 +189,7 @@ sudo ./scripts/uninstall.sh
 - 不修改SIP、系统二进制或睡眠设置；程序不要求屏幕常亮。
 - 原生策略可能在合盖时继续放电到目标，不承诺“只在开盖时放电”。
 - 当前不承诺固定48%–50%补电区间或永远不发生系统校准充电；实际补电阈值尚待验证。
-- 首次测试请自行观察到达目标及睡眠唤醒后的状态，不能仅凭 `hold` 返回成功验收。
+- 首次测试请自行观察到达目标及睡眠唤醒后的状态，不能仅凭 `hold-native` 返回成功验收。
 
 ## 可选：本地记录
 

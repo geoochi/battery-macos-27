@@ -12,7 +12,7 @@ restarted normally. After restart, both PowerUI and the system's effective
 `manualChargeLimit` entries reported 50. Charge Limit must already be enabled
 (`MCLFeatureState=1`). A preference-change notification alone did not reload 50.
 
-`hold TARGET` implements this preference path for integers 20–99 only on the model/build pair tested.
+`hold-native TARGET` implements this preference path for integers 20–99 only on the model/build pair tested.
 It does not alter system binaries, private entitlements or SIP, kill system
 services, or reboot automatically. The root-owned original-limit backup is retained
 for restoration and retries. The internal backup directory keeps its original
@@ -52,7 +52,7 @@ writes and verifies the system preference, then atomically saves and reads back 
 requested-target file. Failure attempts to restore both the immediately previous
 saved preference and previous requested intent, retaining the original backup.
 A process or system crash between the two files is not an atomic cross-file operation;
-verification can report a mismatch, and re-running the intended hold command repairs
+verification can report a mismatch, and re-running the intended hold-native command repairs
 saved intent. Successful restore clears requested intent after verifying recovery.
 
 Only 50 has completed hardware validation. Configurable-target unit tests establish
@@ -85,3 +85,31 @@ workflow. No claim is made that it works on this macOS 27 firmware.
   — upstream compatibility information; older beta support is not proof for later builds.
 
 [Sanitized device validation](validation.md) · [attribution](../THIRD_PARTY.md)
+
+## Adapter control (0.3.0-dev)
+
+The opt-in adapter idea in [upstream PR #154](https://github.com/charlie0129/batt/pull/154)
+(head `5b15f980e2678270c9e78862c0c2018c024fff07`) was tested separately on the
+listed device: CHIE=8 read back successfully, the battery supplied approximately
+12 W during a bounded pulse, and CHIE=0 restored AC with reported net current
+returning to zero after telemetry refreshed. This does not unlock the gated charge
+inhibit or firmware threshold keys. Both service names AppleSMC and
+AppleSMCKeysEndpoint resolve to the same entry on this device.
+
+`hold` now installs a root-owned controller and configuration in
+`/Library/Application Support/battctl-adapter`; `hold-native` retains the reboot
+path. The controller restores CHIE on lid closure, sleep, errors and exit. A separate
+heartbeat guard holds a duplicate of the controller flock, so replacement cannot
+race recovery. It restores on pipe EOF or heartbeat loss, and registers its own
+sleep callback. Launchd abandons the controller process group on termination so
+recovery can finish independently; abnormal controller exits restart with throttling.
+The guard retries restoration failures while retaining the lock. This cannot promise
+recovery from every kernel/firmware failure or simultaneous termination of both
+processes. No protected services are restarted or patched.
+
+Polling occurs approximately every two seconds, but SMC writes are skipped when the
+value already matches. Band adaptation occurs only after complete cycles, bounded
+at 5–10 percentage points below the requested ceiling. Sleep/unplug pauses reset
+cycle timing. Native limits and the user's original backup are not rewritten.
+Status distinguishes controller health from sampled battery behavior; an active
+software policy does not establish continuous exact holding or sleep retention.

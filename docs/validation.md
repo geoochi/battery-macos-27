@@ -53,3 +53,27 @@ use synthetic/fake clients and do not change charging settings.
 
 Contribute sanitized results via the compatibility issue template. Do not bypass
 write restrictions merely to obtain a compatibility report; read-only reports are useful.
+
+## Adapter mode (0.3.0-dev)
+
+On the same model/build/firmware, an isolated 90-second CHIE pulse produced
+negative battery current (approximately 1 A / 12 W) while connected with the lid
+open. Clearing CHIE restored AC recognition and, after telemetry refreshed,
+reported net current returned to zero.
+
+The integrated controller was also exercised on hardware:
+
+- `hold 60` started background control with a 55–60 initial band.
+- `adapter-stop` restored CHIE=0 and preserved the native policy.
+- SIGKILL of the controller was followed by guard restoration; an independent
+  read-only SMC check confirmed CHIE=0.
+- SIGSTOP stalled the controller; after heartbeat timeout the independent guard
+  again restored CHIE=0. Resuming the process allowed cleanup.
+- Requesting the already effective native 70 target selected `native_holding`
+  with adapter power enabled, rather than interval cycling.
+
+Synthetic tests cover complete cycles, bounded band widening/narrowing, invalid
+samples, pause timing resets, native handoff, stale heartbeats and corrupt status.
+**A complete 60-target hardware cycle, multi-cycle adaptation and actual sleep/lid
+transitions in adapter mode are not yet validated.** The earlier native sleep
+results cannot be applied to this separate backend. Test logs remain private.

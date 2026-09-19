@@ -1,3 +1,41 @@
+# No-reboot adapter mode (0.3.0-dev source)
+
+```sh
+make test
+sudo ./build/battctl hold 60
+./build/battctl verify
+sudo ./build/battctl adapter-stop
+```
+
+Open the lid and connect AC before starting. A root-owned launchd service continues
+when the terminal closes. Users supply only a target. The internal band starts at
+5 percentage points below it. After each complete cycle, a cycle under one hour
+widens the band by one point; a cycle over three hours narrows it. Width is bounded
+at 5–10 points. This cycles the battery; it does not park battery current at zero.
+An already verified matching native ceiling is used instead of cycling.
+
+Closing the lid or sleeping restores adapter power and pauses software control;
+the existing native ceiling takes over and can be higher than the requested target.
+Control resumes on open-lid wake. Native preferences and system sleep settings are
+unchanged. The requested target cannot exceed the readable native ceiling.
+Telemetry may lag and thresholds may overshoot slightly. While the adapter is cut,
+both connection flags report disconnected; a real unplug cannot immediately be
+distinguished. The guard restores adapter power after controller death or a lost
+heartbeat; launchd restarts abnormal exits and loads the selected target at boot.
+
+`verify` follows the active adapter controller; `verify-native` inspects the native
+policy separately. `hold-native TARGET` retains the old reboot-based workflow.
+`restore` stops adapter control before restoring the original native preference.
+Updating the CLI alone does not replace a running controller: run `hold TARGET`
+again after upgrading. Complete cycles, adaptation, and real sleep/lid recovery in
+adapter mode still require hardware validation. Native sleep validation below does
+not establish those properties for adapter mode.
+
+**Published v0.2.0 has no adapter mode. Its `hold` command corresponds to the current
+source's `hold-native`. Build current source for no-reboot control.**
+
+---
+
 # battery-macos-27 · battctl
 
 [中文](../README.md) · [Releases](https://github.com/geoochi/battery-macos-27/releases)
@@ -54,7 +92,7 @@ Installation and upgrades do not change battery settings or install a charge dae
    select 80%, and finish any temporary “charge to full” override.
 2. Connect power. Check `sysctl -n hw.model`, `sw_vers -buildVersion`, and
    `battctl native-limit` against the supported configuration above.
-3. Run `sudo battctl hold 50`. The original supported limit is backed up before
+3. Run `sudo battctl hold-native 50`. The original supported limit is backed up before
    the experimental preference is written. Matching saved, requested and active 50% values are a no-op.
 4. When instructed, save your work and restart the Mac normally. The CLI never
    initiates a reboot or forcibly restarts a protected system service.
@@ -69,7 +107,7 @@ entries to agree on the requested target. A successful preference write alone is
 ## Change the target, for example to 70%
 
 ```sh
-sudo battctl hold 70
+sudo battctl hold-native 70
 # Save work and restart normally when prompted, then:
 battctl verify       # follows the requested target saved by battctl
 battctl verify 70    # explicitly verifies 70, not just any active limit
@@ -77,13 +115,13 @@ battctl monitor     # follows saved target changes on each sample
 ```
 
 Accepted targets are integers 20–99. Use `native-limit 100` to allow full charging;
-`hold 100` is rejected. `hold` always requires sudo to inspect the saved system preference as well as
+`hold 100` is rejected. `hold-native` always requires sudo to inspect the saved system preference as well as
 active policy. New targets usually need a normal restart. If saved preference,
 requested intent and active policy already agree, it does not write or need a restart. A saved 70 with an active 50 is
 reported as unverified, with a nonzero `verify` exit status.
 
 The original-limit backup is never replaced when switching targets. You may replace
-a pending request before reboot or cancel it with `sudo battctl hold 50`.
+a pending request before reboot or cancel it with `sudo battctl hold-native 50`.
 Only 50 has completed hardware testing; 70 and other values remain unverified,
 including whether increasing the target immediately charges to the new value.
 
@@ -101,12 +139,12 @@ After upgrading, run `./scripts/record-test.sh start` again to update an existin
 | `verify [TARGET] [--json]`, `monitor [TARGET] [--json]` | Requested or explicit target policy and battery flow, once or every 30 seconds |
 | `doctor` | Native policy and legacy diagnostic information |
 | `native-limit [80]` | Query or set an ordinary supported native limit |
-| `hold TARGET` | Stage an integer target from 20 to 99; sudo required |
+| `hold-native TARGET` | Stage an integer target from 20 to 99; sudo required |
 | `restore` | Restore the original backed-up limit; sudo required |
 
 Prefix each with `battctl`. `verify` exits nonzero when the requested policy cannot be
 verified. The current ordinary setter offers 80/85/90/95/100; `native-limit 50` is
-rejected. Use `hold TARGET` for the separate preference-loading path. Legacy `run` and
+rejected. Use `hold-native TARGET` for the separate preference-loading path. Legacy `run` and
 `reset` are retained for research compatibility and are not the supported workflow
 on the tested firmware.
 

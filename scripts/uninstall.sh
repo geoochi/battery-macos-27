@@ -7,6 +7,9 @@ DEST='/Library/Application Support/battctl'
 if launchctl print system/com.geoochi.battctl >/dev/null 2>&1; then
  echo 'Legacy SMC daemon detected; stop and restore it separately before removing its binary.' >&2; exit 1
 fi
+if [[ -e "/Library/Application Support/battctl-adapter/config.plist" ]]; then
+ "$DEST/battctl" adapter-stop
+fi
 # Restore before removing the executable; retain it if restoration cannot be verified.
 STATE='/Library/Application Support/battctl-reboot-test'
 if [[ -e "$STATE" || -L "$STATE" ]]; then
@@ -16,6 +19,11 @@ else
 fi
 if [[ -L /usr/local/bin/battctl && $(readlink /usr/local/bin/battctl) == "$DEST/battctl" ]]; then
  rm /usr/local/bin/battctl
+fi
+ADAPTER="/Library/Application Support/battctl-adapter"
+if [[ -d "$ADAPTER" && ! -L "$ADAPTER" ]]; then
+ rm -f "$ADAPTER/battctl" "$ADAPTER/controller.log"
+ rmdir "$ADAPTER" || echo "Retained nonempty adapter directory."
 fi
 rm "$DEST/battctl"
 rmdir "$DEST"

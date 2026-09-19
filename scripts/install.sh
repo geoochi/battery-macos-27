@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install the native CLI. The system power service owns the limit; no SMC daemon.
+# Install the CLI; hold installs its separate adapter controller on demand.
 set -euo pipefail
 [[ $EUID == 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }
 [[ $# == 0 ]] || { echo 'Usage: install.sh' >&2; exit 2; }
