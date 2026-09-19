@@ -14,6 +14,7 @@ readback checks and recovery path. Preserve the original backup. Keep preference
 staging, active-policy verification and measured holding separate. Do not add an
 unverified model/build to the write allowlist solely because a read-only API succeeds.
 Do not introduce SIP changes, system-process injection or automatic reboots.
+Keep the native-only scope: no adapter switching, interval cycling or charging daemon.
 
 ## Compatibility reports
 

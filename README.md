@@ -1,197 +1,100 @@
-# battery-macos-27 · battctl
+# battery-macos-27 · battctl v0.2.1
 
-[English](docs/README.en.md) · [下载 / Releases](https://github.com/geoochi/battery-macos-27/releases) · [技术说明](docs/macos-27-battery.md)
+[English](docs/README.en.md) · [下载](https://github.com/geoochi/battery-macos-27/releases) · [技术说明](docs/macos-27-battery.md)
 
-输入一个目标值，例如 `sudo battctl hold 60`，后台自动放电并管理区间，无需重启。
-当前源码版本 **0.3.0-dev** 新增此模式；已发布的 **v0.2.0** 仍使用原生重启流程。
-原生 Objective-C/C CLI，无第三方运行时。
+**设置目标电量 → 按提示正常重启 → 由 macOS 自行充电或放电到目标附近并保持。**
 
-## 免重启模式（当前源码）
+只提供原生限充功能，不安装电池控制守护进程，不反复切换适配器、不主动进行区间充放电。
+接着电源时，达到目标后由系统管理适配器供电与充电；电量仍可能有正常的小幅波动。
 
-```sh
-make test
-sudo ./build/battctl hold 60
-./build/battctl verify
-./build/battctl monitor
-```
+> 实验性预发布。配置范围20–99%，当前写入仅支持 **MacBookPro18,1 / macOS 27.0 build 26A428**。
+> 原生50%已完成开盖、合盖及睡眠唤醒验收；70%有充电到目标及保持的实测记录，其他值仍需逐一验证。
+> 使用系统私有接口与偏好，系统更新可能改变行为。不要关闭SIP或绕过系统保护。
 
-- **先开盖、接上电源**。`hold` 启动由 launchd 管理的后台服务，命令返回后可关闭终端。
-- 用户只输入20–99的整数目标，无需配置上下限、轮询间隔或切换频率。
-- 高于目标时切断适配器输入，使用电池；初始工作区间为目标以下5个百分点。
-  例如60会在约55–60之间循环，并非到60后电池电流恒定为零。
-- 后台只在完整循环结束后调整区间：循环不足1小时则放宽1个百分点，超过3小时则收窄1个百分点；
-  宽度始终限制在5–10个百分点。状态显示当前实际区间。此策略减少切换，但会增加电池使用量，尚无长期寿命验证。
-- 如果目标与已验证生效的原生上限相同，则到达目标后交给原生策略，不循环。
-- 目标不能高于当前原生上限；需要提高原生上限时使用下面的 `hold-native` 流程。
-- **合盖或睡眠时恢复适配器，暂停区间控制**；此时原有原生上限接管，可能高于所设目标。
-  开盖唤醒后自动恢复控制。不修改系统睡眠设置，不保证睡眠期间维持新目标。
-- 强制放电期间，系统可能显示未接电；两个连接标志都会被硬件开关屏蔽。
-  实际拔线无法立即区别，恢复适配器后才能确认是否仍接电。
-- 读数有刷新延迟，百分比边界可能有小幅偏差。后台检查与硬件切换是两回事，不会每次检查都切换电源。
-- 进程退出或失去心跳时，独立看护进程恢复适配器。普通异常退出由 launchd 重启；重启电脑后也会重新加载所选目标。
+## 使用
 
 ```sh
-sudo ./build/battctl hold 65        # 更改目标，不重启
-./build/battctl verify --json       # 当前后台状态和区间
-./build/battctl verify-native       # 单独检查原生策略
-sudo ./build/battctl adapter-stop   # 停止后台控制，恢复适配器，保留原生偏好
+sudo battctl hold 50
+# 如果提示尚未生效：保存工作，手动正常重启 Mac
+battctl verify
 ```
 
-此模式已实测启动、短时放电、停止、控制进程被强杀后的恢复，以及已有原生目标的接管。
-**完整60%充放电循环、自适应区间的长期效果、实际合盖/睡眠恢复尚待硬件验收**；下表的合盖与睡眠结果仅属于原生模式。
+`hold` 会保留原上限备份、保存请求的目标，并检查实际生效策略。
+**保存成功不代表立即生效：重启前仍执行旧上限，可能继续充电到旧目标。** 程序不会自动重启。
 
-> **实验性预发布，支持范围有限。** 目前只在 **M1 Pro、MacBookPro18,1、macOS 27.0 build 26A428** 上验证50%完整流程。
-> 其他机型/构建会拒绝新的目标配置写入；没有强制绕过选项。
-> 使用系统私有接口和非公开偏好，系统更新可能改变行为。不是Apple官方支持的50%功能。
+接着电源正常使用即可；不需要让 CLI 持续运行，也不需要用压力测试耗电。
+更改目标再次执行 `sudo battctl hold 70` 并按提示重启；若保存值、请求值和实际策略已一致，无需重复重启。
+日常合盖、睡眠与唤醒无需重新设置。拔掉电源后，电池会正常消耗。
 
-## 已验证什么
+## 命令
 
-| 场景 | 结果 |
+| 命令 | 用途 |
 | --- | --- |
-| 正常重启后加载50%上限 | 通过 |
-| 插电、开盖自然放电至50% | 通过 |
-| 达到50%后电池净电流归零 | 通过 |
-| 开盖、合盖运行、重新开盖保持 | 通过 |
-| 开盖睡眠后唤醒保持 | 通过 |
-| 合盖睡眠后唤醒保持 | 通过 |
-| 多日/过夜保持、补电阈值、系统校准充电 | 尚未完成验证 |
+| `sudo battctl hold TARGET` | 保存20–99的整数目标，检查是否需要重启 |
+| `battctl status [--json]` | 查看电量、电流、功率、接电与盖子状态 |
+| `battctl verify [TARGET] [--json]` | 核验原生策略；默认读取已保存目标，未核验通过时返回非零 |
+| `battctl monitor [TARGET] [--json]` | 每30秒重复核验；Ctrl-C退出不影响原生策略 |
+| `battctl doctor [--json]` | 查看原生选择值、有效策略、支持值及控制程序冲突 |
+| `sudo battctl restore` | 恢复首次备份的原上限并核验；失败时保留备份供重试 |
+| `battctl --help` / `battctl --version` | 帮助 / 版本 |
 
-结果来自一台设备，不能外推到所有macOS 27电脑。[脱敏验证摘要](docs/validation.md)。
-“保持”允许电量估计和实际电流的小幅波动；没有外部电源时无法锁住电量。
+`policy=active` 表示原生选择值与有效手动限充策略符合目标。
+`near_target` 只表示一次读数接近目标，不能证明长时间保持。
+临时需要充满电，请使用 macOS「电池」设置；本程序不提供第二套充满或充放电控制接口。
 
-## 下载与安装
+## 安装
 
-### 方式一：从源码构建（推荐）
+### 从源码构建
 
-需要Apple Command Line Tools；如尚未安装，先运行 `xcode-select --install` 并完成安装。
+需要 Apple Command Line Tools；尚未安装时先运行 `xcode-select --install`。
 
 ```sh
 git clone https://github.com/geoochi/battery-macos-27.git
 cd battery-macos-27
 make test
-./build/battctl --version
 sudo ./scripts/install.sh
+battctl --version
 ```
 
-### 方式二：下载预编译版本（v0.2.0，仅原生模式）
+也可以直接使用 `sudo ./build/battctl hold 50`。
 
-注意：v0.2.0 的命令名称仍是 `hold`，等同于当前源码的 `hold-native`。免重启模式请从源码构建。
+### 下载预编译版本
 
-从 [Releases](https://github.com/geoochi/battery-macos-27/releases) 下载
-`battctl-v0.2.0-macos-arm64.tar.gz` 和 `SHA256SUMS`，放在同一目录：
+在 [Releases](https://github.com/geoochi/battery-macos-27/releases) 下载
+`battctl-v0.2.1-macos-arm64.tar.gz` 与 `SHA256SUMS`，放在同一目录：
 
 ```sh
 shasum -a 256 -c SHA256SUMS
-tar -xzf battctl-v0.2.0-macos-arm64.tar.gz
-cd battctl-v0.2.0-macos-arm64
-./build/battctl --version
+tar -xzf battctl-v0.2.1-macos-arm64.tar.gz
+cd battctl-v0.2.1-macos-arm64
 sudo ./scripts/install.sh
 ```
 
-二进制仅供Apple silicon/macOS 27使用，未使用Developer ID签名或Apple公证。
-若macOS阻止运行，优先使用源码构建；项目不要求关闭Gatekeeper或SIP。
+安装到 `/Library/Application Support/battctl/battctl`，入口为 `/usr/local/bin/battctl`。
+未使用 Developer ID 签名或 Apple 公证；若系统阻止执行，请从源码构建，不要求关闭 Gatekeeper。
 
-两种安装方式都把程序放入 `/Library/Application Support/battctl/battctl`，并链接到
-`/usr/local/bin/battctl`。若PATH不含此目录，使用 `/usr/local/bin/battctl`。
-安装脚本本身不设置上限。执行 `hold` 时才安装后台控制器；执行 `hold-native` 使用原生流程。升级后重新运行安装脚本，并再次执行 `hold TARGET` 更新运行中的控制器。
+### 首次设置与升级
 
-## 原生模式：首次启用（以已实测的50%为例）
-
-1. 停用其它电池控制软件，在系统设置中启用原生“充电上限”，先选80%；结束“充满电”等临时覆盖。
-2. 接好充电线，检查型号、系统构建和当前值：
-
-   ```sh
-   sysctl -n hw.model
-   sw_vers -buildVersion
-   battctl native-limit
-   ```
-
-3. 保存实验配置：
-
-   ```sh
-   sudo battctl hold-native 50
-   ```
-
-   程序备份原上限、保存50，并提示是否需要重启。已生效时不会重复写入。
-4. 保存工作后，**手动正常重启Mac**。程序不会自动重启，也不会强行重启受保护的系统服务。
-5. 重启后运行：
-
-   ```sh
-   battctl verify
-   battctl monitor
-   ```
-
-`policy=active` 表示PowerUI与实际系统限充策略都符合检查目标，不只是偏好文件写入成功。
-正常使用电脑即可自然放电；到目标后观察电池电流与电量。无需压力测试耗电。
-`monitor` 每30秒打印一次，Ctrl-C退出不影响限充。
-
-## 修改目标，例如70%
-
-```sh
-sudo battctl hold-native 70
-# 保存工作，按提示手动正常重启，然后：
-battctl verify          # 默认读取本程序保存的目标70
-battctl verify 70        # 显式检查70，避免将其它有效上限误认为目标已生效
-battctl monitor         # 持续跟随本程序保存的目标
-```
-
-支持20–99的整数；`hold 100` 会拒绝，允许充满请用 `native-limit 100`。
-`hold-native`始终使用sudo，以便连同保存的系统偏好一起核对，避免漏掉待重启配置。
-原生模式的目标变化通常需要正常重启；若保存值、请求值、实际策略均相同，则无需写入或重启。
-**已保存70、实际仍是50时，verify会返回未生效和非零退出码。**
-修改目标保留首次原上限备份；重启前也可再次修改或用 `sudo battctl hold-native 50` 取消70请求。
-70及其他非50目标尚未完成硬件验收，不保证升高目标后立即充电到精确目标值。
-
-请求的目标保存在 `/Library/Preferences/com.geoochi.battctl.plist`，由root写入、普通用户只读。
-旧版本未创建此配置时，默认检查50%，不会自动把系统当前值当成你的期望值。
-`restore`成功后清除此请求配置；可用 `native-limit` 查看恢复后的系统值。
-已有可选记录器升级后，重新运行 `./scripts/record-test.sh start` 更新它使用的程序。
-
-## 常用命令
-
-| 命令 | 用途 |
-| --- | --- |
-| `battctl status [--json]` | 当前电量、电流、功率、适配器和盖子状态 |
-| `battctl watch [--json]` | 每5秒打印电池状态 |
-| `battctl verify [TARGET] [--json]` | 检查保存的目标或显式目标；不可验证时返回非零 |
-| `battctl monitor [TARGET] [--json]` | 每30秒检查目标策略和电池状态 |
-| `battctl doctor` | 诊断；目标原生策略有效时无需SMC控制权限 |
-| `battctl native-limit` | 查看PowerUI选择值、启用状态和可设置值 |
-| `battctl native-limit 80` | 设置系统支持值；当前接口提供80/85/90/95/100 |
-| `sudo battctl hold TARGET` | 启动或更新免重启后台控制，自动管理区间 |
-| `sudo battctl adapter-stop` | 停止后台控制并恢复适配器供电 |
-| `battctl verify-native [TARGET]` | 单独核验原生上限 |
-| `sudo battctl hold-native TARGET` | 备份并准备20–99%目标配置；未生效时提示手动重启 |
-| `sudo battctl restore` | 恢复首次备份的原上限并核验生效情况 |
-
-`native-limit 50` 会被拒绝；免重启控制使用 `hold TARGET`，原生偏好流程使用 `hold-native TARGET`。`near_target` 只描述单次读数接近目标，
-不等于已经证明长期保持。项目中的 `run` / `reset` 是旧SMC实验后端，当前固件不可用，
-不属于本版推荐工作流程。
+- 第一次使用：停用其他电池控制软件，在系统设置中启用原生「充电上限」，先选择80%，结束临时「充满电」覆盖，再执行 `hold`。
+- 从 v0.2.0 升级：重新构建/下载并运行安装脚本，已有目标与原始备份保留。
+- 从曾安装的区间控制开发版升级：安装脚本先调用旧版自身的恢复功能，确认控制器及看护进程退出，再移除其服务、配置、可执行文件与日志。恢复适配器后，旧原生上限可能恢复充电；原生目标与备份保持不变。
+- 新版统一使用 `hold` / `verify`。旧 `hold-native` / `verify-native` 会提示新名称；`watch`、`native-limit`、`run`、`reset` 和区间控制命令已删除。
+- 无论从哪个版本升级，安装后运行 `battctl doctor` 检查状态。安装本身不改原生目标，也不要求为升级而重启。
 
 ## 恢复与卸载
 
 ```sh
 sudo battctl restore
-# 在下载/克隆的项目目录中：
 ./scripts/record-test.sh stop    # 如果启用过可选记录器
 sudo ./scripts/uninstall.sh
 ```
 
-原上限备份在 `/Library/Application Support/battctl-reboot-test/previous-limit`，不要手动删除。
-卸载时如存在备份，先恢复再删除程序；未曾启用时可直接卸载。
-若恢复未通过核验，程序和备份会保留，请根据错误提示正常重启后复查。
-也可以在系统设置中选回支持的充电上限以退出实验配置。
+原始上限备份保存在 `/Library/Application Support/battctl-reboot-test/previous-limit`。
+请求目标保存在 `/Library/Preferences/com.geoochi.battctl.plist`。不要手动删除备份。
+卸载会先恢复原上限；恢复失败则保留程序与备份，并提示后续操作。
+未曾创建目标记录的旧安装默认核验50%，不会把系统当前值自动当作用户目标。
 
-## 注意事项
-
-- **持续插电**才可能保持。电源功率不足、断开电源、电量估计变化可能影响读数。
-- 系统设置中的“充满电”、修改原生上限、系统更新或其它控制程序可能覆盖目标上限；之后运行 `verify`；本程序保存的期望目标不会随外部改动自动改变。
-- 不修改SIP、系统二进制或睡眠设置；程序不要求屏幕常亮。
-- 原生策略可能在合盖时继续放电到目标，不承诺“只在开盖时放电”。
-- 当前不承诺固定48%–50%补电区间或永远不发生系统校准充电；实际补电阈值尚待验证。
-- 首次测试请自行观察到达目标及睡眠唤醒后的状态，不能仅凭 `hold-native` 返回成功验收。
-
-## 可选：本地记录
+## 可选：只读记录
 
 ```sh
 ./scripts/record-test.sh start
@@ -199,10 +102,15 @@ sudo ./scripts/uninstall.sh
 ./scripts/record-test.sh stop
 ```
 
-用户LaunchAgent每分钟按本程序保存的目标只读采样一次，登录后加载。深度睡眠暂停，后台唤醒时可能采样；
-它不控制电池、不防止睡眠。日志在 `~/Library/Logs/battctl/`，停止记录不影响限充。
-记录会持续追加，测试结束后可停止并自行清理。程序不联网、不上传遥测。
-分享日志前请移除时间、个人路径、进程信息等隐私；不要上传完整IORegistry或系统日志。
+登录后的用户任务每分钟采样一次，日志在 `~/Library/Logs/battctl/`。
+它不控制电池、不阻止睡眠；停止记录不影响限充。升级后再次运行 `start` 更新记录器。
+日志只保存在本机，不联网、不上传遥测。分享前移除时间、个人路径等隐私。
+
+## 验证范围
+
+参见[脱敏硬件验证摘要](docs/validation.md)。系统校准、适配器功率不足、临时充满覆盖、
+系统升级以及其他电池工具都可能影响保持效果，不能承诺百分比永久精确不变。
+首次设置新目标时应实际观察到达目标、合盖及睡眠唤醒后的表现。
 
 ## 开发与许可
 
@@ -210,7 +118,5 @@ sudo ./scripts/uninstall.sh
 make test
 ```
 
-测试覆盖电流解码、有效策略判断、原生接口失败/回滚与旧放电策略；不写真实电池设置。
-CI编译通过不代表对应runner硬件已支持50%。
-
-[贡献说明](CONTRIBUTING.md) · [第三方来源](THIRD_PARTY.md) · [GPL-2.0许可](LICENSE)
+测试不改电池设置；覆盖目标解析、配置事务与回滚、原生接口失败处理、有效策略判断和 CLI 参数。
+GPL-2.0，参见 [LICENSE](LICENSE) 与 [THIRD_PARTY.md](THIRD_PARTY.md)。

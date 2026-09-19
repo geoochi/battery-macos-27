@@ -28,6 +28,6 @@ int main(void){@autoreleasepool{
  c=fake();e=nil;assert(nativeSetLimit(c,80,&e));assert(c.writes==0);
  c=fake();e=nil;assert(nativeSetLimit(c,100,&e));assert(c.state==0&&c.limit==100);assert(nativeSetLimit(c,100,&e));assert(c.writes==1);
  c=fake();c.limit=50;c.rejected=YES;e=nil;assert(!nativeSetLimit(c,85,&e));assert(c.writes==1&&c.limit==50);assert([e.localizedDescription containsString:@"unchanged"]);
- c=fake();c.limit=70;c.corrupt=YES;e=nil;assert(!nativeSetLimit(c,85,&e));assert(c.writes==1);assert([e.localizedDescription containsString:@"cannot restore"]);assert([e.localizedDescription containsString:@"hold-native 70"]);
+ c=fake();c.limit=70;c.corrupt=YES;e=nil;assert(!nativeSetLimit(c,85,&e));assert(c.writes==1);assert([e.localizedDescription containsString:@"cannot restore"]);assert([e.localizedDescription containsString:@"hold 70"]);
  puts("Native limit: unsupported targets, read failure, write/readback/rollback, disabled state passed");
 }}

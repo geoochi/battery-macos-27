@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.1 — native-only maintenance update
+
+- Keep one workflow: `hold TARGET`, normal restart when needed, native holding.
+- Remove interval cycling, its controller/guard, and legacy SMC control/probe code.
+- Standardize commands: hold, status, verify, monitor, doctor and restore.
+- Upgrade cleanup safely retires the old experimental service and files while
+  preserving the native target and original-limit backup.
+- Explicitly report the active selection and warn that the old limit can keep
+  charging before restart. Treat an empty pmset limit list as unverified, not malformed.
+- Refresh Chinese/English documentation, hardware observations and CLI regression checks.
+- This is a new patch release; the published v0.2.0 tag and artifacts are unchanged.
+
 ## 0.2.0 — configurable experimental targets
 
 - `hold TARGET` accepts integers 20–99, including 70; 100 remains the ordinary

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install the CLI; hold installs its separate adapter controller on demand.
+# Install the native-only CLI; no battery-control daemon is installed.
 set -euo pipefail
 [[ $EUID == 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }
 [[ $# == 0 ]] || { echo 'Usage: install.sh' >&2; exit 2; }
@@ -14,6 +14,7 @@ LINK=/usr/local/bin/battctl
 if [[ -e "$LINK" || -L "$LINK" ]]; then
  [[ -L "$LINK" && $(readlink "$LINK") == "$DEST/battctl" ]] || { echo 'Existing /usr/local/bin/battctl belongs to another installation.' >&2; exit 1; }
 fi
+/bin/bash "$ROOT/scripts/cleanup-experimental.sh"
 install -d -o root -g wheel -m 755 "$DEST"
 install -o root -g wheel -m 755 "$ROOT/build/battctl" "$DEST/battctl.new"
 mv -f "$DEST/battctl.new" "$DEST/battctl"

@@ -27,5 +27,7 @@ int main(void){@autoreleasepool{
  e=nil;assert(!parseBatteryLimits(@"(50)",&e)&&e);
  e=nil;assert(!parseBatteryLimits(@"( { bad ",&e)&&e);
  e=nil;assert(parseBatteryLimits(@"()",&e).count==0&&!e);
+ e=nil;assert(parseBatteryLimits(@"No battery level limits set\n",&e).count==0&&!e);
+ assert(![limitAssessment(native,@[],battery,50)[@"policy_active"] boolValue]);
  puts("Persistent policy: real pmset format, stale/conflicting/malformed entries, overrides, telemetry, and phase semantics passed");
 }}

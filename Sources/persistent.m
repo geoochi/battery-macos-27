@@ -61,6 +61,7 @@ static NSString *command(NSString *path,NSArray *args,NSError **error){
  return [out stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
 }
 NSArray *parseBatteryLimits(NSString *text,NSError **error){
+ if([[text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet] isEqual:@"No battery level limits set"])return @[];
  NSRange start=[text rangeOfString:@"("],end=[text rangeOfString:@")" options:NSBackwardsSearch];
  if(start.location==NSNotFound||end.location==NSNotFound||end.location<start.location){if(error)*error=failure(@"Cannot parse pmset battery limits");return nil;}
  NSData *data=[[text substringWithRange:NSMakeRange(start.location,NSMaxRange(end)-start.location)] dataUsingEncoding:NSUTF8StringEncoding];
@@ -158,7 +159,7 @@ static NSInteger backupValue(NSError **e){
  if(e)*e=failure(@"Invalid original-limit backup");return -1;
 }
 int persistentHold(NSInteger target){
- if(target<20||target>99){fprintf(stderr,"Target must be an integer from 20 to 99; use native-limit 100 to allow a full charge.\n");return 2;}
+ if(target<20||target>99){fprintf(stderr,"Target must be an integer from 20 to 99; use macOS Battery settings for full charging.\n");return 2;}
  // Even a no-op must inspect the root preference: a pending or interrupted write
  // can differ from both active policy and our last saved requested target.
  int lock=lockPreferences();if(lock<0)return 1;int result=1;
@@ -202,7 +203,10 @@ int persistentHold(NSInteger target){
    ^BOOL(NSDictionary *value,NSError **error){return writeTargetConfiguration(value,error);},&e))goto done;
  NSDictionary *after=effectiveLimitSnapshot(@{},target);
  if([after[@"policy_active"] boolValue])printf("Saved target=%ld%% and verified the active policy. No reboot needed.\n",(long)target);
- else printf("Saved target=%ld%%; the active policy is not yet %ld%%. Save work and restart normally, then run battctl verify %ld. No reboot performed.\n",(long)target,(long)target,(long)target);
+ else {
+  printf("Saved target=%ld%%. Active native selection is still %s%%.\n",(long)target,[after[@"native"][@"selected_limit"] description].UTF8String);
+  printf("Until restart, macOS continues using the OLD limit and may keep charging above the requested target.\nSave work and restart normally, then run battctl verify %ld. No reboot performed.\n",(long)target);
+ }
  if(target!=50)puts("Only 50% has completed hardware validation; observe this target after restart, including sleep/wake.");
  puts("Original-limit backup retained. Restore: sudo battctl restore");result=0;
  }
@@ -223,7 +227,7 @@ int persistentRestore(void){
    if([row[@"chargeSocLimitReason"] isEqual:@"manualChargeLimit"]&&!exactInteger(row[@"Terminated"],1)&&(!exactInteger(row[@"Terminated"],0)||!exactInteger(row[@"chargeSocLimitSoc"],100)))verified=NO;
   }
  }
- if(!verified){e=failure(@"Original preference saved, but effective restoration is not verified. Backup retained. Restart normally, then check battctl native-limit and pmset -g battlimit");goto done;}
+ if(!verified){e=failure(@"Original preference saved, but effective restoration is not verified. Backup retained. Restart normally, then check battctl doctor and pmset -g battlimit");goto done;}
  if(!exactInteger(readPreference(@"mclLimitValue",&e),previous))goto done;
  if(!writeTargetConfiguration(nil,&e))goto done;
  // Retain the small backup for retries and future re-enabling; never overwrite it.
