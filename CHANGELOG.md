@@ -10,6 +10,8 @@
 - Distinguish successful staging from verified holding after an OS update.
 - Replace the root README with AGENTS.md for AI maintenance context, including
   required Codex coauthor attribution and automatic commit/push after changes.
+- Document automatic version tagging and evidence-based release publication;
+  prepare self-contained release notes while 26A434 reboot validation is pending.
 
 ## 0.2.1 — native-only maintenance update
 
