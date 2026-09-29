@@ -22,7 +22,15 @@ controller and calls that old controller's recovery executable before removing i
 
 Root writes `mclLimitValue` in `com.apple.smartcharging.topoffprotection`.
 The native feature must already be enabled and temporary overrides finished.
-Writes are restricted to the tested model/build pair; unsupported systems fail closed.
+Writes retain the tested model restriction (MacBookPro18,1), but no longer require
+an exact OS build string. Before any preference write, the native API must be
+readable, Charge Limit enabled, preferences valid, and the current native selection
+consistent with all active manual-limit entries. This check uses the current
+selection so a saved pending target does not falsely fail compatibility checks.
+The original recovery value must remain supported by the native API. Missing,
+malformed or inconsistent policy data fails closed. A passing preflight only
+permits staging; reboot loading and sustained holding still need verification on
+each new OS version. Private preference compatibility is not guaranteed.
 
 The first supported original value is stored in the root-only file
 `/Library/Application Support/battctl-reboot-test/previous-limit` and never replaced

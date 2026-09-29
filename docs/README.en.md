@@ -1,11 +1,14 @@
-# battctl v0.2.1 — native macOS charge limit
+# battctl v0.2.2 (unreleased) — native macOS charge limit
 
 Save one target, restart normally if prompted, and let macOS charge or discharge
 toward it and maintain it. No battery-control daemon, adapter switching or interval
 cycling is included. Small normal fluctuations remain possible.
 
-Experimental: writes are restricted to MacBookPro18,1 / macOS 27.0 build 26A428.
-50% completed open-lid, closed-lid and sleep/wake validation. 70% has observed
+The private preference path is restricted to MacBookPro18,1, without an exact OS
+build allowlist. Each write checks the native API, preferences, current effective
+policy and recovery backup. Failed checks prevent writing. Passing these checks
+does not establish successful boot loading or holding on a new OS version.
+On 26A428, 50% completed open-lid, closed-lid and sleep/wake validation. 70% has observed
 charging-to-target and holding results. Other configurable values remain unverified.
 
 ## Install and use
@@ -48,6 +51,9 @@ one sample, not proof of continuous holding. Unplugging allows normal battery us
 
 [Releases](https://github.com/geoochi/battery-macos-27/releases) provide
 `battctl-v0.2.1-macos-arm64.tar.gz` and `SHA256SUMS`:
+
+These are the published 0.2.1 artifacts with the old build restriction; the 0.2.2
+compatibility change has not been released yet.
 
 ```sh
 shasum -a 256 -c SHA256SUMS

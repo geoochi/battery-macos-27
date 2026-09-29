@@ -8,6 +8,7 @@ BOOL persistTargetTransition(NSInteger target, NSInteger previous, NSDictionary 
     BOOL (^writeConfiguration)(NSDictionary *, NSError **), NSError **error);
 NSArray *parseBatteryLimits(NSString *text, NSError **error);
 NSDictionary *limitAssessment(NSDictionary *native, NSArray *limits, NSDictionary *battery, NSInteger target);
+BOOL validateStagingCompatibility(NSString *model, NSDictionary *live, NSError **error);
 // target=0 follows the saved requested target; older installations default to 50.
 NSDictionary *effectiveLimitSnapshot(NSDictionary *battery, NSInteger target);
 int persistentHold(NSInteger target);

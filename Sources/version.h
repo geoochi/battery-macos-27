@@ -1,2 +1,2 @@
 #pragma once
-#define BATTCTL_VERSION "0.2.1"
+#define BATTCTL_VERSION "0.2.2"

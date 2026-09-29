@@ -111,6 +111,24 @@ NSDictionary *effectiveLimitSnapshot(NSDictionary *battery,NSInteger target){
  out[@"battery"]=battery?:@{};out[@"native"]=native?:@{};out[@"effective_limits"]=limits?:@[];out[@"errors"]=errors;
  return out;
 }
+BOOL validateStagingCompatibility(NSString *model,NSDictionary *live,NSError **error){
+ // Keep the hardware scope unchanged; OS build strings are not a capability test.
+ if(![model isEqual:@"MacBookPro18,1"]){
+  if(error)*error=failure(@"Preference staging is currently supported only on MacBookPro18,1; no battery setting changed");return NO;
+ }
+ NSDictionary *native=live[@"native"];
+ if(![live[@"errors"] isKindOfClass:NSArray.class]||[live[@"errors"] count]||
+    ![native[@"available_limits"] isKindOfClass:NSArray.class]||![native[@"available_limits"] count]||
+    ![live[@"effective_limits"] isKindOfClass:NSArray.class]){
+  if(error)*error=failure(@"Compatibility check failed: native API or effective policy could not be read; no battery setting changed");return NO;
+ }
+ // Assess the CURRENT selection, not the requested (possibly pending) target.
+ NSInteger selected=[native[@"selected_limit"] integerValue];
+ if(selected<20||selected>100||![limitAssessment(native,live[@"effective_limits"],@{},selected)[@"policy_active"] boolValue]){
+  if(error)*error=failure(@"Compatibility check failed: current native selection and active manual-limit entries do not agree. Finish temporary overrides and check battctl doctor; no battery setting changed");return NO;
+ }
+ return YES;
+}
 static NSString *readPreference(NSString *key,NSError **e){return command(@"/usr/bin/defaults",@[@"read",domain,key],e);}
 static BOOL saveLimit(NSInteger n,NSError **e){
  if(!command(@"/usr/bin/defaults",@[@"write",domain,@"mclLimitValue",@"-int",[@(n) description]],e))return NO;
@@ -164,9 +182,8 @@ int persistentHold(NSInteger target){
  // can differ from both active policy and our last saved requested target.
  int lock=lockPreferences();if(lock<0)return 1;int result=1;
  NSError *e=nil;NSDictionary *configuration=nil;
- NSString *build=command(@"/usr/bin/sw_vers",@[@"-buildVersion"],&e);
  NSString *model=command(@"/usr/sbin/sysctl",@[@"-n",@"hw.model"],&e);
- if(![build isEqual:@"26A428"]||![model isEqual:@"MacBookPro18,1"]){e=failure(@"Experimental staging is restricted to MacBookPro18,1 / 26A428; only 50% has completed hardware validation");goto done;}
+ if(!model)goto done;
  {
  // Read configuration under the lock, so rollback uses current state.
  configuration=readTargetConfiguration(&e);if(e)goto done;
@@ -177,12 +194,14 @@ int persistentHold(NSInteger target){
  if(exactInteger(saved,100))previous=100;
  else if(!parseHoldTarget(saved.UTF8String,&previous)){e=failure(@"Invalid saved system limit; refusing to overwrite it");goto done;}
  NSDictionary *live=effectiveLimitSnapshot(@{},target);
+ if(!validateStagingCompatibility(model,live,&e))goto done;
  if(targetAlreadyApplied(target,previous,configuration,live)){
   printf("%ld%% is saved, active and matches the requested target. No change or reboot needed.\n",(long)target);result=0;goto done;
  }
  struct stat info;
  if(lstat(state.fileSystemRepresentation,&info)==0){
-  if(backupValue(&e)<0)goto done;
+  NSInteger original=backupValue(&e);if(original<0)goto done;
+  if(![snapshot[@"available_limits"] containsObject:@(original)]){e=failure(@"The original backup is no longer a supported native limit; refusing to overwrite preferences");goto done;}
   // An existing valid original backup permits experimental -> experimental
   // transitions and replacing a pending target. Keep that backup unchanged.
  }else{
@@ -207,7 +226,7 @@ int persistentHold(NSInteger target){
   printf("Saved target=%ld%%. Active native selection is still %s%%.\n",(long)target,[after[@"native"][@"selected_limit"] description].UTF8String);
   printf("Until restart, macOS continues using the OLD limit and may keep charging above the requested target.\nSave work and restart normally, then run battctl verify %ld. No reboot performed.\n",(long)target);
  }
- if(target!=50)puts("Only 50% has completed hardware validation; observe this target after restart, including sleep/wake.");
+ puts("Runtime compatibility checks passed. After restart, verify the target and observe sleep/wake; checks before restart do not prove holding on this OS version.");
  puts("Original-limit backup retained. Restore: sudo battctl restore");result=0;
  }
  done:if(result)fprintf(stderr,"%s\n",(e.localizedDescription?:@"Target update failed").UTF8String);close(lock);return result;

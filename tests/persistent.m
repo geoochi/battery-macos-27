@@ -11,6 +11,24 @@ int main(void){@autoreleasepool{
  assert([d[@"policy_active"] boolValue]&&[d[@"phase"] isEqual:@"discharging_to_target"]);
  // A saved/native selection alone is insufficient; all active manual entries must agree.
  assert(![limitAssessment(native,@[],battery,50)[@"policy_active"] boolValue]);
+ // New OS builds use capability checks, with unchanged hardware scope. Pending
+ // target 50 must not reject a coherent currently active 80% policy.
+ NSMutableDictionary *live=[@{@"native":@{@"selected_limit":@80,@"enabled_state":@1,@"available_limits":@[@80,@85,@90,@95,@100]},
+  @"effective_limits":@[row(@"80",@"0")],@"errors":@[],@"target":@50,@"policy_active":@NO} mutableCopy];
+ e=nil;assert(validateStagingCompatibility(@"MacBookPro18,1",live,&e)&&!e);
+ e=nil;assert(!validateStagingCompatibility(@"OtherModel",live,&e)&&e);
+ live[@"errors"]=@[@"pmset unavailable"];e=nil;assert(!validateStagingCompatibility(@"MacBookPro18,1",live,&e)&&e);
+ live[@"errors"]=@[];live[@"effective_limits"]=@[];e=nil;assert(!validateStagingCompatibility(@"MacBookPro18,1",live,&e)&&e);
+ live[@"effective_limits"]=@[row(@"50",@"0")];e=nil;assert(!validateStagingCompatibility(@"MacBookPro18,1",live,&e)&&e);
+ live[@"effective_limits"]=@[row(@"80",@"oops")];e=nil;assert(!validateStagingCompatibility(@"MacBookPro18,1",live,&e)&&e);
+ live[@"effective_limits"]=@[row(@"80",@"0")];
+ live[@"native"]=@{@"selected_limit":@80,@"enabled_state":@2,@"available_limits":@[@80]};
+ e=nil;assert(!validateStagingCompatibility(@"MacBookPro18,1",live,&e)&&e);
+ live[@"native"]=@{@"selected_limit":@80,@"enabled_state":@1,@"available_limits":@[]};
+ e=nil;assert(!validateStagingCompatibility(@"MacBookPro18,1",live,&e)&&e);
+ live[@"native"]=@{@"selected_limit":@50,@"enabled_state":@1,@"available_limits":@[@80,@85,@90,@95,@100]};
+ live[@"effective_limits"]=@[row(@"50",@"0")];
+ e=nil;assert(validateStagingCompatibility(@"MacBookPro18,1",live,&e)&&!e);
  assert(![limitAssessment(native,@[row(@"80",@"0")],battery,50)[@"policy_active"] boolValue]);
  assert(![limitAssessment(native,@[row(@"50",@"0"),row(@"80",@"0")],battery,50)[@"policy_active"] boolValue]);
  assert([limitAssessment(native,@[row(@"50",@"0"),row(@"80",@"1")],battery,50)[@"policy_active"] boolValue]);

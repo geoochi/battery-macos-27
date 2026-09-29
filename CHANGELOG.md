@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.2 — OS update compatibility (unreleased)
+
+- Replace the exact OS build allowlist with runtime API and effective-policy
+  checks, retaining the MacBookPro18,1 hardware scope.
+- Refuse staging if the current selection and active policy disagree, policy
+  reading fails, or the original recovery limit is no longer supported.
+- Keep preference readback, transaction rollback, backups and manual reboot.
+- Distinguish successful staging from verified holding after an OS update.
+- Replace the root README with AGENTS.md for AI maintenance context, including
+  required Codex coauthor attribution and automatic commit/push after changes.
+
 ## 0.2.1 — native-only maintenance update
 
 - Keep one workflow: `hold TARGET`, normal restart when needed, native holding.

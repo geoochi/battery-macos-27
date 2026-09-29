@@ -36,6 +36,16 @@ protected-service restarts or sleep-setting changes were needed.
 - Whether system calibration charging overrides an experimental target.
 - Continuous current during deep sleep or recovery from every power-loss/update case.
 
+## macOS 27.0.1 / 26A434: staging verified, reboot test pending
+
+On the same MacBookPro18,1, v0.2.2 passed runtime compatibility checks with
+native selection 80% and two matching active manual-limit entries. `hold 50`
+succeeded and read back the saved system preference as 50%. The original
+80% backup was retained. The running policy remained at 80%, as expected
+before reboot. Boot loading of 50%, discharge to target and sleep/wake holding
+on this build are not yet verified. This is not a repeat of the completed
+26A428 hardware validation.
+
 Tests cover configuration parsing, saved intent, replacement of pending targets,
 partial writes and rollback, native API failures, policy verification and CLI argument
 rejection. They use fake clients for writes and do not alter charging settings.

@@ -3,7 +3,7 @@
 set -euo pipefail
 CLI=./build/battctl
 "$CLI" --help
-[[ $("$CLI" --version) == 'battctl 0.2.1' ]]
+[[ $("$CLI" --version) == 'battctl 0.2.2' ]]
 expect_usage() {
  local result=0
  "$CLI" "$@" >/dev/null 2>&1 || result=$?
